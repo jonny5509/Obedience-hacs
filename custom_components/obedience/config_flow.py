@@ -4,6 +4,7 @@ import uuid
 from urllib.parse import urlencode
 
 import voluptuous as vol
+from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant import config_entries
 from homeassistant.core import callback
 
@@ -14,12 +15,19 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        if self.hass.config.external_url is None or not self.hass.config.external_url.startswith("https://"):
+        external_url = self.hass.config.external_url
+        if not external_url or not external_url.startswith("https://"):
+            try:
+                external_url = async_remote_ui_url(self.hass)
+            except CloudNotAvailable:
+                external_url = None
+
+        if not external_url or not external_url.startswith("https://"):
             return self.async_abort(reason="no_external_url")
 
         hass_data = self.hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
         extension_id = str(uuid.uuid4())
-        callback_url = f"{self.hass.config.external_url.rstrip('/')}/api/obedience/callback"
+        callback_url = f"{external_url.rstrip('/')}/api/obedience/callback"
         auth_url = (
             "https://app.obedienceapp.com/home/extension-request?"
             + urlencode({
