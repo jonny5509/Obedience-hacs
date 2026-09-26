@@ -8,6 +8,7 @@ from aiohttp import web
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.data_entry_flow import FlowResultType
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN
 
@@ -64,7 +65,7 @@ class ObedienceCallbackView(HomeAssistantView):
                 text=f"Home Assistant could not complete the Obedience authorization: {err}",
             )
 
-        if result["type"] != "external_step_done":
+        if result["type"] != FlowResultType.EXTERNAL_STEP_DONE:
             return web.Response(
                 status=500,
                 text=f"Unexpected authorization flow result: {result['type']}",
