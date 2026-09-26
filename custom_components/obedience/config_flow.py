@@ -17,6 +17,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self.hass.config.external_url is None or not self.hass.config.external_url.startswith("https://"):
             return self.async_abort(reason="no_external_url")
 
+        hass_data = self.hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
         extension_id = str(uuid.uuid4())
         callback_url = f"{self.hass.config.external_url.rstrip('/')}/api/obedience/callback"
         auth_url = (
@@ -27,7 +28,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "redirect": callback_url,
             })
         )
-        self.hass.data[DOMAIN]["pending"][extension_id] = True
+        hass_data["pending"][extension_id] = True
 
         return self.async_show_form(
             step_id="user",
@@ -38,7 +39,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return ObedienceOptionsFlow(config_entry)
+        return ObedienceOptionsFlow()
 
     async def async_step_import(self, user_input=None):
         if not user_input:
@@ -56,9 +57,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-class ObedienceOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
 
+class ObedienceOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         return self.async_show_form(step_id="init", data_schema=vol.Schema({}))
