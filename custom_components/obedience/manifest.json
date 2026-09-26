@@ -4,8 +4,12 @@
   "version": "0.1.0",
   "documentation": "https://github.com/jonny5509/Obedience-hacs",
   "issue_tracker": "https://github.com/jonny5509/Obedience-hacs/issues",
-  "requirements": [],
-  "codeowners": ["@jonny5509"],
+  "requirements": [
+    "cryptography>=41.0.0"
+  ],
+  "codeowners": [
+    "@jonny5509"
+  ],
   "config_flow": true,
   "iot_class": "cloud_push"
 }
