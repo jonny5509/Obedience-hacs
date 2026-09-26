@@ -11,6 +11,16 @@ from homeassistant.components.http import HomeAssistantView
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN
 
+def async_register_views(hass) -> None:
+    """Register HTTP views before the config entry exists."""
+    key = f"{DOMAIN}_views_registered"
+    if hass.data.get(key):
+        return
+    hass.http.register_view(ObedienceCallbackView)
+    hass.http.register_view(ObedienceWebhookView)
+    hass.data[key] = True
+
+
 PUBLIC_KEY = b"""-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDWZ6RbZ5cBGzxbe0/1/pJGkA62
 JD4VREffIRfWHYHO+AE5P6EEis487pnLRR7eG5E+OvlYjtUVDF9eyuS866WR6L1h
