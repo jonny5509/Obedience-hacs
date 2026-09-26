@@ -4,8 +4,8 @@ import uuid
 from urllib.parse import urlencode
 
 import voluptuous as vol
-from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant import config_entries
+from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.core import callback
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN, NAME
@@ -14,20 +14,17 @@ from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN, NAME
 class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    def __init__(self) -> None:
+        self._auth_data: dict[str, str] | None = None
+
     async def async_step_user(self, user_input=None):
-        if user_input:
-            extension_id = user_input[CONF_EXTENSION_ID]
-            uid = user_input[CONF_UID]
-            await self.async_set_unique_id(uid)
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title="Obedience",
-                data={
-                    CONF_EXTENSION_ID: extension_id,
-                    CONF_SECRET: user_input[CONF_SECRET],
-                    CONF_UID: uid,
-                },
-            )
+        if user_input is not None:
+            self._auth_data = {
+                CONF_EXTENSION_ID: user_input[CONF_EXTENSION_ID],
+                CONF_SECRET: user_input[CONF_SECRET],
+                CONF_UID: user_input[CONF_UID],
+            }
+            return self.async_external_step_done(next_step_id="finish")
 
         external_url = self.hass.config.external_url
         if not external_url or not external_url.startswith("https://"):
@@ -46,18 +43,26 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         auth_url = (
             "https://app.obedienceapp.com/home/extension-request?"
-            + urlencode(
-                {
-                    "id": extension_id,
-                    "name": NAME,
-                    "redirect": callback_url,
-                }
-            )
+            + urlencode({
+                "id": extension_id,
+                "name": NAME,
+                "redirect": callback_url,
+            })
         )
 
-        return self.async_external_step(
-            step_id="user",
-            url=auth_url,
+        return self.async_external_step(step_id="user", url=auth_url)
+
+    async def async_step_finish(self, user_input=None):
+        if not self._auth_data:
+            return self.async_abort(reason="auth_failed")
+
+        uid = self._auth_data[CONF_UID]
+        await self.async_set_unique_id(uid)
+        self._abort_if_unique_id_configured()
+
+        return self.async_create_entry(
+            title="Obedience",
+            data=self._auth_data,
         )
 
     @staticmethod
@@ -68,14 +73,15 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_import(self, user_input=None):
         if not user_input:
             return self.async_abort(reason="auth_failed")
+
         uid = user_input[CONF_UID]
-        extension_id = user_input[CONF_EXTENSION_ID]
         await self.async_set_unique_id(uid)
         self._abort_if_unique_id_configured()
+
         return self.async_create_entry(
             title="Obedience",
             data={
-                CONF_EXTENSION_ID: extension_id,
+                CONF_EXTENSION_ID: user_input[CONF_EXTENSION_ID],
                 CONF_SECRET: user_input[CONF_SECRET],
                 CONF_UID: uid,
             },
