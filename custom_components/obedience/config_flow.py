@@ -14,8 +14,6 @@ from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN, NAME
 class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    def __init__(self) -> None:
-        self._auth_data: dict[str, str] | None = None
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
@@ -37,10 +35,9 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="no_external_url")
 
         extension_id = str(uuid.uuid4())
-        callback_url = (
-            f"{external_url.rstrip('/')}/api/obedience/callback"
-            f"?config_flow_id={self.flow_id}"
-        )
+        hass_data = self.hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
+        hass_data["pending"][extension_id] = self.flow_id
+        callback_url = f"{external_url.rstrip('/')}/api/obedience/callback"
         auth_url = (
             "https://app.obedienceapp.com/home/extension-request?"
             + urlencode({
