@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect Obedience",
-        "description": "Enter the public URL that Obedience can reach to contact your Home Assistant. It can be HTTP or HTTPS. This must be reachable from the internet.",
+        "description": "Enter the public URL that Obedience can reach to contact your Home Assistant. It must use HTTPS. This must be reachable from the internet.",
         "data": {
           "public_url": "Public Home Assistant URL"
         }
