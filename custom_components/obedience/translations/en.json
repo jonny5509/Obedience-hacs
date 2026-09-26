@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Obedience",
+        "description": "Click Submit to open Obedience. Approve access, then return to Home Assistant.",
+        "data": {}
+      }
+    },
+    "abort": {
+      "already_configured": "This Obedience connection is already configured.",
+      "no_external_url": "Home Assistant must have an HTTPS external URL configured before Obedience can be connected.",
+      "auth_failed": "Obedience authorization did not return valid credentials."
+    }
+  }
+}
