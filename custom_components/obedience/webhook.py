@@ -49,13 +49,6 @@ class ObedienceCallbackView(HomeAssistantView):
                 text="Invalid Obedience authorization response.",
             )
 
-        flow = hass.config_entries.flow.async_get(flow_id)
-        if flow is None:
-            return web.Response(
-                status=404,
-                text="Obedience authorization flow is no longer active. Start the Obedience setup again.",
-            )
-
         try:
             result = await hass.config_entries.flow.async_configure(
                 flow_id,
