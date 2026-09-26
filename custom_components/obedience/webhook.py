@@ -37,6 +37,13 @@ class ObedienceCallbackView(HomeAssistantView):
                 text="Invalid Obedience authorization response.",
             )
 
+        flow = hass.config_entries.flow.async_get(flow_id)
+        if flow is None:
+            return web.Response(
+                status=404,
+                text="Obedience authorization flow is no longer active. Start the Obedience setup again.",
+            )
+
         try:
             result = await hass.config_entries.flow.async_configure(
                 flow_id,
@@ -46,25 +53,24 @@ class ObedienceCallbackView(HomeAssistantView):
                     CONF_UID: uid,
                 },
             )
-        except Exception:
+        except Exception as err:
             return web.Response(
                 status=500,
-                text="Home Assistant could not complete the Obedience authorization.",
+                text=f"Home Assistant could not complete the Obedience authorization: {err}",
             )
 
-        if result["type"] not in ("create_entry", "abort"):
+        if result["type"] != "external_step_done":
             return web.Response(
                 status=500,
-                text="Obedience authorization did not complete.",
+                text=f"Unexpected authorization flow result: {result['type']}",
             )
 
         return web.Response(
             content_type="text/html",
             text=(
-                "<!doctype html><html><body>"
-                "<p>Obedience connected. You can close this window.</p>"
-                "<script>window.close();</script>"
-                "</body></html>"
+                "<!doctype html><html><head><title>Obedience connected</title></head>"
+                "<body><p>Obedience connected. You can close this window.</p>"
+                "<script>window.close()</script></body></html>"
             ),
         )
 
