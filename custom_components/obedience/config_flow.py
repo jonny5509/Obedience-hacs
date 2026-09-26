@@ -9,6 +9,7 @@ from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_ur
 from homeassistant.core import callback
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN, NAME
+from .webhook import async_register_views
 
 
 class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -16,6 +17,8 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
     async def async_step_user(self, user_input=None):
+        async_register_views(self.hass)
+
         if user_input is not None:
             self._auth_data = {
                 CONF_EXTENSION_ID: user_input[CONF_EXTENSION_ID],
