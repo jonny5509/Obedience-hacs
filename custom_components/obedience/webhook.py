@@ -30,23 +30,16 @@ class ObedienceCallbackView(HomeAssistantView):
         secret = request.query.get("secret")
         uid = request.query.get("uid")
         pending = hass.data.get(DOMAIN, {}).get("pending", {})
-
         if not extension_id or not secret or not uid or extension_id not in pending:
             return web.Response(status=400, text="Invalid Obedience authorization.")
-
         pending.pop(extension_id, None)
         result = await hass.config_entries.flow.async_init(
             DOMAIN,
             context={"source": config_entries.SOURCE_IMPORT},
-            data={
-                CONF_EXTENSION_ID: extension_id,
-                CONF_SECRET: secret,
-                CONF_UID: uid,
-            },
+            data={CONF_EXTENSION_ID: extension_id, CONF_SECRET: secret, CONF_UID: uid},
         )
         if result["type"] == "abort":
             return web.Response(status=409, text=result.get("reason", "Authorization failed"))
-
         return web.HTTPFound("/config/integrations")
 
 class ObedienceWebhookView(HomeAssistantView):
@@ -61,30 +54,18 @@ class ObedienceWebhookView(HomeAssistantView):
             payload = json.loads(body)
         except json.JSONDecodeError:
             return web.Response(status=400, text="Invalid JSON")
-
-        coordinator = None
-        for candidate in hass.data.get(DOMAIN, {}).get("coordinators", {}).values():
-            if candidate.api.extension_id == extension_id:
-                coordinator = candidate
-                break
-
-        if coordinator is None or not hmac.compare_digest(
-            payload.get("secret", ""), coordinator.api.secret
-        ):
+        coordinator = next(
+            (c for c in hass.data.get(DOMAIN, {}).get("coordinators", {}).values()
+             if c.api.extension_id == extension_id), None
+        )
+        if coordinator is None or not hmac.compare_digest(payload.get("secret", ""), coordinator.api.secret):
             return web.Response(status=401, text="Unauthorized")
-
         signature = request.headers.get("X-Signature")
         if signature:
             try:
                 public_key = serialization.load_pem_public_key(PUBLIC_KEY)
-                public_key.verify(
-                    base64.b64decode(signature),
-                    body,
-                    padding.PKCS1v15(),
-                    hashes.SHA256(),
-                )
+                public_key.verify(base64.b64decode(signature), body, padding.PKCS1v15(), hashes.SHA256())
             except Exception:
                 return web.Response(status=401, text="Invalid signature")
-
         await coordinator.async_request_refresh()
         return web.Response(status=204)
