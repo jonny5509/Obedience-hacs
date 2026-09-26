@@ -42,7 +42,7 @@ class ObedienceCallbackView(HomeAssistantView):
         uid = request.query.get("uid")
 
         pending = hass.data.get(DOMAIN, {}).get("pending", {})
-        flow_id = pending.pop(extension_id, None)
+        flow_id = pending.get(extension_id)
 
         if not flow_id or not extension_id or not secret or not uid:
             return web.Response(
@@ -65,11 +65,15 @@ class ObedienceCallbackView(HomeAssistantView):
                 text=f"Home Assistant could not complete the Obedience authorization: {err}",
             )
 
-        if result["type"] != FlowResultType.EXTERNAL_STEP_DONE:
+        result_type = result.get("type")
+        expected_type = FlowResultType.EXTERNAL_STEP_DONE
+        if result_type not in (expected_type, expected_type.value, "external_done"):
             return web.Response(
                 status=500,
                 text=f"Unexpected authorization flow result: {result['type']}",
             )
+
+        pending.pop(extension_id, None)
 
         return web.Response(
             content_type="text/html",
