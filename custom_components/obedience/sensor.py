@@ -41,8 +41,6 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         )
 
     def _relationship_nickname(self, obj: dict[str, Any]) -> str | None:
-        # Support either a direct nickname/name field or a nested partner
-        # object, in case Obedience includes profile data in the response.
         for key in ("partner_nickname", "nickname", "partner_name"):
             value = obj.get(key)
             if isinstance(value, str) and value.strip():
@@ -91,21 +89,19 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         if obj is None:
             return {}
 
-        if self.resource == "relationships":
-            return {
-                "owner": obj.get("owner"),
-                "partner": obj.get("partner"),
-                "nickname": self._relationship_nickname(obj),
-                "reward": obj.get("reward", 0),
-                "history": obj.get("history"),
-                "notes": obj.get("notes"),
-            }
+        # Expose every field returned by the Obedience API. Nothing is
+        # intentionally dropped so we can diagnose exactly what the API
+        # provides for each object.
+        attributes = dict(obj)
 
-        return {
-            key: value
-            for key, value in obj.items()
-            if key not in ("id", "name", "amount", "reward")
-        }
+        if self.resource == "relationships":
+            attributes["nickname"] = self._relationship_nickname(obj)
+
+        # Keep the complete API object available in one clearly named field
+        # as well, which makes nested/unexpected API fields easy to inspect.
+        attributes["api_data"] = dict(obj)
+
+        return attributes
 
     @property
     def icon(self) -> str:
