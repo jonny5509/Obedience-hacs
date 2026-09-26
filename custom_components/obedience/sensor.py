@@ -31,44 +31,45 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         self._attr_unique_id = f"obedience_{resource}_{self.obj_id}"
 
         if resource == "relationships":
-            partner = obj.get("partner")
-            owner = obj.get("owner")
-            if partner:
-                self._attr_name = f"Relationship with {partner}"
-            elif owner:
-                self._attr_name = f"Relationship for {owner}"
-            else:
-                self._attr_name = f"Relationship {self.obj_id}"
+            # Do not use the Obedience UUID as the visible entity name.
+            # The useful relationship details are exposed as state attributes.
+            self._attr_name = "Relationship"
         else:
             self._attr_name = obj.get("name") or f"{RESOURCE_NAMES[resource]} {self.obj_id}"
 
+    def _current_object(self) -> dict[str, Any] | None:
+        return next(
+            (
+                obj
+                for obj in self.coordinator.data.get(self.resource, [])
+                if str(obj.get("id")) == self.obj_id
+            ),
+            None,
+        )
+
     @property
     def available(self) -> bool:
-        return any(
-            str(o.get("id")) == self.obj_id
-            for o in self.coordinator.data.get(self.resource, [])
-        )
+        return super().available and self._current_object() is not None
 
     @property
-    def native_value(self):
-        obj = next(
-            o
-            for o in self.coordinator.data.get(self.resource, [])
-            if str(o.get("id")) == self.obj_id
-        )
-        return obj.get("reward", 0) if self.resource == "relationships" else obj.get("amount", 0)
+    def native_value(self) -> Any:
+        obj = self._current_object()
+        if obj is None:
+            return None
+
+        if self.resource == "relationships":
+            return obj.get("reward", 0)
+
+        return obj.get("amount", 0)
 
     @property
-    def extra_state_attributes(self):
-        obj = next(
-            o
-            for o in self.coordinator.data.get(self.resource, [])
-            if str(o.get("id")) == self.obj_id
-        )
+    def extra_state_attributes(self) -> dict[str, Any]:
+        obj = self._current_object()
+        if obj is None:
+            return {}
 
         if self.resource == "relationships":
             return {
-                "relationship_id": self.obj_id,
                 "owner": obj.get("owner"),
                 "partner": obj.get("partner"),
                 "reward": obj.get("reward", 0),
@@ -77,13 +78,13 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
             }
 
         return {
-            k: v
-            for k, v in obj.items()
-            if k not in ("id", "name", "amount", "reward")
+            key: value
+            for key, value in obj.items()
+            if key not in ("id", "name", "amount", "reward")
         }
 
     @property
-    def icon(self):
+    def icon(self) -> str:
         return {
             "habits": "mdi:check-circle-outline",
             "rewards": "mdi:gift-outline",
@@ -94,11 +95,27 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
     coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
-    async_add_entities(
-        [
-            ObedienceObjectSensor(coordinator, resource, obj)
-            for resource, objects in coordinator.data.items()
-            for obj in objects
-            if obj.get("id") is not None
-        ]
+    known_ids: set[str] = set()
+
+    def add_new_entities() -> None:
+        entities = []
+        for resource, objects in coordinator.data.items():
+            for obj in objects:
+                if obj.get("id") is None:
+                    continue
+
+                key = f"{resource}:{obj['id']}"
+                if key in known_ids:
+                    continue
+
+                known_ids.add(key)
+                entities.append(ObedienceObjectSensor(coordinator, resource, obj))
+
+        if entities:
+            async_add_entities(entities)
+
+    add_new_entities()
+
+    entry.async_on_unload(
+        coordinator.async_add_listener(add_new_entities)
     )
