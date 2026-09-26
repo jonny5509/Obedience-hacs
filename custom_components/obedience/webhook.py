@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import hmac
 import json
-from typing import Any
-from urllib.parse import urlencode
 
 from aiohttp import web
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
+from homeassistant import config_entries
 from homeassistant.components.http import HomeAssistantView
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN
 
 PUBLIC_KEY = b"""-----BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUFA4GNADCBiQKBgQDWZ6RbZ5cBGzxbe0/1/pJGkA62
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDWZ6RbZ5cBGzxbe0/1/pJGkA62
 JD4VREffIRfWHYHO+AE5P6EEis487pnLRR7eG5E+OvlYjtUVDF9eyuS866WR6L1h
 C9N8hCV/N3ew2anTamfhNO7RIRRzMrFOz1wxJH9A+aEJVnuGg3SeRYzKWW7LPZ0Q
 aP/+Yu9hK3pUPc1YCwIDAQAB
@@ -46,8 +44,8 @@ class ObedienceCallbackView(HomeAssistantView):
                 CONF_UID: uid,
             },
         )
-        if result["type"] == "abort" and result.get("reason") == "already_configured":
-            return web.Response(status=409, text="This Obedience account is already connected.")
+        if result["type"] == "abort":
+            return web.Response(status=409, text=result.get("reason", "Authorization failed"))
 
         return web.HTTPFound("/config/integrations")
 
@@ -59,7 +57,10 @@ class ObedienceWebhookView(HomeAssistantView):
     async def post(self, request: web.Request, extension_id: str) -> web.Response:
         hass = request.app["hass"]
         body = await request.read()
-        payload = json.loads(body)
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            return web.Response(status=400, text="Invalid JSON")
 
         coordinator = None
         for candidate in hass.data.get(DOMAIN, {}).get("coordinators", {}).values():
