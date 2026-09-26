@@ -8,12 +8,11 @@ from homeassistant.helpers import aiohttp_client
 from .api import ObedienceApi
 from .const import CONF_EXTENSION_ID, CONF_SECRET, DOMAIN, PLATFORMS
 from .coordinator import ObedienceCoordinator
-from .webhook import ObedienceCallbackView, ObedienceWebhookView
+from .webhook import async_register_views
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
-    hass.http.register_view(ObedienceCallbackView)
-    hass.http.register_view(ObedienceWebhookView)
+    async_register_views(hass)
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
