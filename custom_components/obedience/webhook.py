@@ -26,10 +26,12 @@ class ObedienceCallbackView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
-        flow_id = request.query.get("config_flow_id")
         extension_id = request.query.get("id")
         secret = request.query.get("secret")
         uid = request.query.get("uid")
+
+        pending = hass.data.get(DOMAIN, {}).get("pending", {})
+        flow_id = pending.pop(extension_id, None)
 
         if not flow_id or not extension_id or not secret or not uid:
             return web.Response(
