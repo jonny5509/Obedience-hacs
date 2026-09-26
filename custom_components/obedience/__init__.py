@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import aiohttp_client
@@ -23,6 +24,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
 
     external_url = hass.config.external_url
+    if not external_url or not external_url.startswith("https://"):
+        try:
+            external_url = async_remote_ui_url(hass)
+        except CloudNotAvailable:
+            external_url = None
+
     if external_url and external_url.startswith("https://"):
         webhook_url = f"{external_url.rstrip('/')}/api/obedience/webhook/{entry.data[CONF_EXTENSION_ID]}"
         try:
