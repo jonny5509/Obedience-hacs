@@ -30,13 +30,6 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         self.obj_id = str(obj["id"])
         self._attr_unique_id = f"obedience_{resource}_{self.obj_id}"
 
-        if resource == "relationships":
-            # Do not use the Obedience UUID as the visible entity name.
-            # The useful relationship details are exposed as state attributes.
-            self._attr_name = "Relationship"
-        else:
-            self._attr_name = obj.get("name") or f"{RESOURCE_NAMES[resource]} {self.obj_id}"
-
     def _current_object(self) -> dict[str, Any] | None:
         return next(
             (
@@ -46,6 +39,36 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
             ),
             None,
         )
+
+    def _relationship_nickname(self, obj: dict[str, Any]) -> str | None:
+        # Support either a direct nickname/name field or a nested partner
+        # object, in case Obedience includes profile data in the response.
+        for key in ("partner_nickname", "nickname", "partner_name"):
+            value = obj.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        partner = obj.get("partner")
+        if isinstance(partner, dict):
+            for key in ("nickname", "name", "displayName", "display_name"):
+                value = partner.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+        return None
+
+    @property
+    def name(self) -> str:
+        obj = self._current_object()
+
+        if self.resource == "relationships":
+            nickname = self._relationship_nickname(obj or {})
+            return nickname or "Relationship"
+
+        if obj:
+            return obj.get("name") or f"{RESOURCE_NAMES[self.resource]} {self.obj_id}"
+
+        return f"{RESOURCE_NAMES[self.resource]} {self.obj_id}"
 
     @property
     def available(self) -> bool:
@@ -72,6 +95,7 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
             return {
                 "owner": obj.get("owner"),
                 "partner": obj.get("partner"),
+                "nickname": self._relationship_nickname(obj),
                 "reward": obj.get("reward", 0),
                 "history": obj.get("history"),
                 "notes": obj.get("notes"),
