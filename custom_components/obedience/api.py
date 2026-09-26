@@ -7,6 +7,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import API_BASE
 
+
 class ObedienceApi:
     def __init__(self, session: ClientSession, extension_id: str, secret: str) -> None:
         self._session = session
@@ -40,17 +41,4 @@ class ObedienceApi:
             "habits",
             params={"id": habit_id},
             json={"action": "increment", "amount": amount},
-        )
-
-    async def configure_webhook(self, url: str) -> Any:
-        return await self._request(
-            "POST",
-            "webhook",
-            json={
-                "url": url,
-                "habits": True,
-                "rewards": True,
-                "punishments": True,
-                "relationships": True,
-            },
         )
