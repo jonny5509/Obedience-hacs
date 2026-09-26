@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect Obedience",
-        "description": "Home Assistant will open Obedience's authorization page. After you approve access, Obedience will return the connection credentials to Home Assistant.",
+        "description": "Open [Obedience authorization]({auth_url}) and approve access. Obedience will then return the connection credentials to Home Assistant.",
         "data": {}
       }
     },
