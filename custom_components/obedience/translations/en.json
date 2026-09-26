@@ -5,6 +5,11 @@
         "title": "Connect Obedience",
         "description": "Open [Obedience authorization]({auth_url}) and approve access. Obedience will then return the connection credentials to Home Assistant.",
         "data": {}
+      },
+      "reconfigure": {
+        "title": "Reauthorize Obedience",
+        "description": "Open [Obedience authorization]({auth_url}) and approve access. This creates a completely fresh Obedience extension authorization and replaces the existing credentials.",
+        "data": {}
       }
     },
     "abort": {
