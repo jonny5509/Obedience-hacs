@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -89,18 +90,12 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         if obj is None:
             return {}
 
-        # Expose every field returned by the Obedience API. Nothing is
-        # intentionally dropped so we can diagnose exactly what the API
-        # provides for each object.
         attributes = dict(obj)
 
         if self.resource == "relationships":
             attributes["nickname"] = self._relationship_nickname(obj)
 
-        # Keep the complete API object available in one clearly named field
-        # as well, which makes nested/unexpected API fields easy to inspect.
         attributes["api_data"] = dict(obj)
-
         return attributes
 
     @property
@@ -113,14 +108,50 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         }[self.resource]
 
 
+class ObedienceDiagnosticSensor(
+    CoordinatorEntity[ObedienceCoordinator], SensorEntity
+):
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:database-search"
+
+    def __init__(
+        self,
+        coordinator: ObedienceCoordinator,
+        resource: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self.resource = resource
+        self._attr_unique_id = f"obedience_diagnostic_{resource}"
+        self._attr_name = f"API {RESOURCE_NAMES[resource]}s"
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator.data.get(self.resource, []))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        objects = self.coordinator.data.get(self.resource, [])
+        return {
+            "resource": self.resource,
+            "count": len(objects),
+            "ids": [
+                str(obj.get("id"))
+                for obj in objects
+                if obj.get("id") is not None
+            ],
+            "api_objects": json.dumps(objects, default=str),
+        }
+
+
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
     coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
     known_ids: set[str] = set()
 
     def add_new_entities() -> None:
         entities = []
-        for resource, objects in coordinator.data.items():
-            for obj in objects:
+
+        for resource in RESOURCE_NAMES:
+            for obj in coordinator.data.get(resource, []):
                 if obj.get("id") is None:
                     continue
 
@@ -135,6 +166,13 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
             async_add_entities(entities)
 
     add_new_entities()
+
+    async_add_entities(
+        [
+            ObedienceDiagnosticSensor(coordinator, resource)
+            for resource in RESOURCE_NAMES
+        ]
+    )
 
     entry.async_on_unload(
         coordinator.async_add_listener(add_new_entities)
