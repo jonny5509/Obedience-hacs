@@ -7,7 +7,6 @@ import json
 from aiohttp import web
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from homeassistant import config_entries
 from homeassistant.components.http import HomeAssistantView
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN
@@ -19,6 +18,7 @@ C9N8hCV/N3ew2anTamfhNO7RIRRzMrFOz1wxJH9A+aEJVnuGg3SeRYzKWW7LPZ0Q
 aP/+Yu9hK3pUPc1YCwIDAQAB
 -----END PUBLIC KEY-----"""
 
+
 class ObedienceCallbackView(HomeAssistantView):
     url = "/api/obedience/callback"
     name = "api:obedience:callback"
@@ -26,21 +26,48 @@ class ObedienceCallbackView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
+        flow_id = request.query.get("config_flow_id")
         extension_id = request.query.get("id")
         secret = request.query.get("secret")
         uid = request.query.get("uid")
-        pending = hass.data.get(DOMAIN, {}).get("pending", {})
-        if not extension_id or not secret or not uid or extension_id not in pending:
-            return web.Response(status=400, text="Invalid Obedience authorization.")
-        pending.pop(extension_id, None)
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": config_entries.SOURCE_IMPORT},
-            data={CONF_EXTENSION_ID: extension_id, CONF_SECRET: secret, CONF_UID: uid},
+
+        if not flow_id or not extension_id or not secret or not uid:
+            return web.Response(
+                status=400,
+                text="Invalid Obedience authorization response.",
+            )
+
+        try:
+            result = await hass.config_entries.flow.async_configure(
+                flow_id,
+                {
+                    CONF_EXTENSION_ID: extension_id,
+                    CONF_SECRET: secret,
+                    CONF_UID: uid,
+                },
+            )
+        except Exception:
+            return web.Response(
+                status=500,
+                text="Home Assistant could not complete the Obedience authorization.",
+            )
+
+        if result["type"] not in ("create_entry", "abort"):
+            return web.Response(
+                status=500,
+                text="Obedience authorization did not complete.",
+            )
+
+        return web.Response(
+            content_type="text/html",
+            text=(
+                "<!doctype html><html><body>"
+                "<p>Obedience connected. You can close this window.</p>"
+                "<script>window.close();</script>"
+                "</body></html>"
+            ),
         )
-        if result["type"] == "abort":
-            return web.Response(status=409, text=result.get("reason", "Authorization failed"))
-        return web.HTTPFound("/config/integrations")
+
 
 class ObedienceWebhookView(HomeAssistantView):
     url = "/api/obedience/webhook/{extension_id}"
@@ -54,18 +81,34 @@ class ObedienceWebhookView(HomeAssistantView):
             payload = json.loads(body)
         except json.JSONDecodeError:
             return web.Response(status=400, text="Invalid JSON")
+
         coordinator = next(
-            (c for c in hass.data.get(DOMAIN, {}).get("coordinators", {}).values()
-             if c.api.extension_id == extension_id), None
+            (
+                c
+                for c in hass.data.get(DOMAIN, {}).get("coordinators", {}).values()
+                if c.api.extension_id == extension_id
+            ),
+            None,
         )
-        if coordinator is None or not hmac.compare_digest(payload.get("secret", ""), coordinator.api.secret):
+        if coordinator is None or not hmac.compare_digest(
+            payload.get("secret", ""), coordinator.api.secret
+        ):
             return web.Response(status=401, text="Unauthorized")
+
         signature = request.headers.get("X-Signature")
-        if signature:
-            try:
-                public_key = serialization.load_pem_public_key(PUBLIC_KEY)
-                public_key.verify(base64.b64decode(signature), body, padding.PKCS1v15(), hashes.SHA256())
-            except Exception:
-                return web.Response(status=401, text="Invalid signature")
+        if not signature:
+            return web.Response(status=401, text="Missing signature")
+
+        try:
+            public_key = serialization.load_pem_public_key(PUBLIC_KEY)
+            public_key.verify(
+                base64.b64decode(signature),
+                body,
+                padding.PKCS1v15(),
+                hashes.SHA256(),
+            )
+        except Exception:
+            return web.Response(status=401, text="Invalid signature")
+
         await coordinator.async_request_refresh()
         return web.Response(status=204)
