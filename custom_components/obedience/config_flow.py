@@ -15,6 +15,8 @@ from .webhook import async_register_views
 class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    def __init__(self) -> None:
+        self._auth_data: dict[str, str] | None = None
 
     async def async_step_user(self, user_input=None):
         async_register_views(self.hass)
