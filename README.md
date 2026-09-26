@@ -4,37 +4,23 @@ A Home Assistant custom integration for the Obedience public API.
 
 ## Features
 
-- Uses the official Obedience API.
-- **Polling only:** Home Assistant makes outbound HTTPS requests to Obedience.
-- No Nabu Casa subscription, port forwarding, tunnel, webhook or inbound Home Assistant connection is required.
-- Imports all accessible habits, rewards, punishments and relationships.
-- Exposes each object as a Home Assistant sensor with its API data as attributes.
-- Provides increase/decrease buttons for habits that the Obedience API allows Home Assistant to change.
+- Connect your Obedience account through the official authorization flow.
+- Import all accessible habits, rewards, punishments and relationships.
+- Expose each object as a Home Assistant sensor with its API data as attributes.
+- Provide increase/decrease buttons for habits that the Obedience API allows Home Assistant to change.
+- Register an Obedience webhook automatically for near-real-time refreshes.
+- Verify Obedience webhook signatures with the public RSA key.
 
 ## Installation
 
-Install this repository through HACS as a custom repository, or copy the `custom_components/obedience` folder into Home Assistant.
+Install this repository through HACS as a custom repository, or copy custom_components/obedience into your Home Assistant configuration.
 
-Go to **Settings → Devices & services → Add integration → Obedience**.
+Home Assistant must have an HTTPS external URL configured because Obedience requires a fully-qualified HTTPS redirect URL for authorization.
 
-Because Obedience requires a fully qualified HTTPS redirect URL, the integration uses a static authorization helper hosted by GitHub Pages. It only displays the values returned by Obedience so you can copy them into Home Assistant.
+Then go to Settings → Devices & services → Add integration → Obedience and authorize Home Assistant in Obedience.
 
-### GitHub Pages setup
+## API scope
 
-Enable GitHub Pages for this repository:
-
-**Settings → Pages → Deploy from a branch → main → /docs**
-
-The authorization helper URL is:
-
-https://jonny5509.github.io/Obedience-hacs/authorize.html
-
-After authorization, copy the returned extension ID, secret and user ID into Home Assistant.
-
-## Security
-
-The extension secret is an Obedience API credential. Keep it private and do not share the authorization URL or secret.
-
-After setup, Home Assistant only makes outbound requests to the Obedience API. Webhooks are not configured.
+The integration uses the documented Obedience extension API to read habits, rewards, punishments and relationships and to increment/decrement habits. It does not store your Obedience password; authorization returns an extension ID and per-user secret which Home Assistant stores in the config entry.
 
 The Obedience API is currently documented as beta and may change.
