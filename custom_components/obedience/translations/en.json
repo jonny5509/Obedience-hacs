@@ -1,19 +1,16 @@
 {
   "config": {
     "step": {
-      "authorize": {
+      "user": {
         "title": "Connect Obedience",
-        "description": "1. Open this link: {auth_url}\n\n2. Approve Home Assistant in Obedience.\n\n3. The authorization page will show the returned values. Copy the extension ID, secret and user ID into the fields below.\n\nHome Assistant only uses these credentials for outbound API requests. No webhook or inbound connection is required.",
-        "data": {
-          "extension_id": "Extension ID",
-          "secret": "Extension secret",
-          "uid": "Obedience user ID"
-        }
+        "description": "Click Submit to open Obedience. Approve access, then return to Home Assistant.",
+        "data": {}
       }
     },
     "abort": {
       "already_configured": "This Obedience connection is already configured.",
-      "auth_failed": "The Obedience authorization credentials are invalid or the authorization session expired."
+      "no_external_url": "Home Assistant must have an HTTPS external URL configured before Obedience can be connected.",
+      "auth_failed": "Obedience authorization did not return valid credentials."
     }
   }
 }
