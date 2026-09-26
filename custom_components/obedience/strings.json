@@ -3,14 +3,21 @@
     "step": {
       "user": {
         "title": "Connect Obedience",
-        "description": "Home Assistant will open Obedience's authorization page. After you approve access, Obedience will return the connection credentials to Home Assistant.",
-        "data": {}
+        "description": "Enter the public URL that Obedience can reach to contact your Home Assistant. It can be HTTP or HTTPS. This must be reachable from the internet.",
+        "data": {
+          "public_url": "Public Home Assistant URL"
+        }
+      },
+      "authorize": {
+        "title": "Authorize Obedience",
+        "description": "Open this authorization link and approve Home Assistant in Obedience:\n\n{auth_url}\n\nCallback URL: {callback_url}\nWebhook URL: {webhook_url}\n\nAfter approval, Obedience will redirect to Home Assistant and finish the setup."
       }
     },
     "abort": {
       "already_configured": "This Obedience connection is already configured.",
-      "no_external_url": "Home Assistant must have an HTTPS external URL configured before Obedience can be connected.",
-      "auth_failed": "Obedience authorization did not return valid credentials."
+      "auth_failed": "Obedience authorization did not return valid credentials.",
+      "invalid_public_url": "Enter a complete public URL beginning with http:// or https://.",
+      "authorization_started": "Authorization was started. Complete the approval in Obedience, then return to Home Assistant."
     }
   }
 }
