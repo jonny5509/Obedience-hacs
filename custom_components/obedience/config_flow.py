@@ -25,7 +25,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             public_url = user_input[CONF_PUBLIC_URL].strip().rstrip("/")
             parsed = urlparse(public_url)
 
-            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            if parsed.scheme != "https" or not parsed.netloc:
                 return self.async_show_form(
                     step_id="user",
                     data_schema=vol.Schema(
