@@ -25,6 +25,8 @@ class ObedienceApi:
                 raise HomeAssistantError(
                     f"Obedience API returned HTTP {response.status}: {text[:300]}"
                 )
+            if response.status == 204:
+                return None
             return await response.json()
 
     async def get_all(self) -> dict[str, list[dict[str, Any]]]:
@@ -41,4 +43,17 @@ class ObedienceApi:
             "habits",
             params={"id": habit_id},
             json={"action": "increment", "amount": amount},
+        )
+
+    async def configure_webhook(self, webhook_url: str) -> Any:
+        return await self._request(
+            "POST",
+            "webhook",
+            json={
+                "url": webhook_url,
+                "habits": True,
+                "rewards": True,
+                "punishments": True,
+                "relationships": True,
+            },
         )
