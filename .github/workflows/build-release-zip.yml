@@ -19,11 +19,9 @@ jobs:
 
       - name: Build HACS ZIP
         run: |
-          rm -rf build obedience.zip
-          mkdir -p build/obedience/custom_components
-          cp -r custom_components/obedience build/obedience/custom_components/
-          cd build
-          zip -r ../obedience.zip obedience
+          rm -f obedience.zip
+          cd custom_components/obedience
+          zip -r ../../obedience.zip .
 
       - name: Upload ZIP to release
         uses: softprops/action-gh-release@v3
