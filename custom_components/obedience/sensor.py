@@ -56,6 +56,46 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
 
         return None
 
+    @staticmethod
+    def _is_valid_value(value: Any) -> bool:
+        return value is not None and not (
+            isinstance(value, str) and value.strip().lower() in {"", "unknown", "unavailable", "none", "null"}
+        )
+
+    @staticmethod
+    def _history_value(obj: dict[str, Any]) -> tuple[Any, Any] | None:
+        """Return the newest valid amount in history, when the API includes it."""
+        history = obj.get("history")
+        if not isinstance(history, list):
+            return None
+
+        candidates = []
+        for entry in history:
+            if not isinstance(entry, dict) or not ObedienceObjectSensor._is_valid_value(entry.get("amount")):
+                continue
+
+            date = entry.get("date")
+            if isinstance(date, dict):
+                seconds = date.get("_seconds", 0)
+                nanos = date.get("_nanoseconds", 0)
+                try:
+                    timestamp = float(seconds) + float(nanos) / 1_000_000_000
+                except (TypeError, ValueError):
+                    timestamp = 0
+            else:
+                timestamp = 0
+
+            candidates.append((timestamp, entry.get("amount"), date))
+
+        if not candidates:
+            return None
+
+        _, amount, date = max(candidates, key=lambda item: item[0])
+        return amount, date
+
+    def _value_key(self) -> str:
+        return "reward" if self.resource == "relationships" else "amount"
+
     @property
     def name(self) -> str:
         obj = self._current_object()
@@ -79,10 +119,15 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         if obj is None:
             return None
 
-        if self.resource == "relationships":
-            return obj.get("reward", 0)
+        current_value = obj.get(self._value_key())
+        if self._is_valid_value(current_value):
+            return current_value
 
-        return obj.get("amount", 0)
+        history_value = self._history_value(obj)
+        if history_value is not None:
+            return history_value[0]
+
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -91,6 +136,13 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
             return {}
 
         attributes = dict(obj)
+        current_value = obj.get(self._value_key())
+        history_value = self._history_value(obj)
+        if not self._is_valid_value(current_value) and history_value is not None:
+            attributes["value_source"] = "history"
+            attributes["history_value_date"] = history_value[1]
+        else:
+            attributes["value_source"] = "current_api"
 
         if self.resource == "relationships":
             attributes["nickname"] = self._relationship_nickname(obj)
