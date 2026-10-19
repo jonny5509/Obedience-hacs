@@ -139,4 +139,4 @@ For HACS installations:
 
 See the repository for the current project license.
 
-
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/jonny5509)
