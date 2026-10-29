@@ -26,6 +26,43 @@ The integration connects your Obedience account to Home Assistant, exposes suppo
 
 > **Important:** Obedience requires a fully qualified **HTTPS** redirect URL for authorization. Make sure Home Assistant's external URL is configured correctly before starting setup.
 
+## Use Obedience without Home Assistant Cloud
+
+Home Assistant Cloud is not required if you provide your own publicly reachable HTTPS URL. One free option for Home Assistant OS or Supervised is a DuckDNS hostname with a Let's Encrypt certificate. The steps below expose Home Assistant directly on port 8123; only do this if you are comfortable making your Home Assistant instance reachable from the internet.
+
+1. Create a DuckDNS hostname (for example, `my-home.duckdns.org`) and copy its token.
+2. In Home Assistant, install and open the **Duck DNS** add-on. Configure it with your hostname and token, and enable its Let's Encrypt certificate options. The add-on configuration is generally similar to:
+
+	 ```yaml
+	 domains:
+		 - my-home.duckdns.org
+	 token: YOUR_DUCKDNS_TOKEN
+	 aliases: []
+	 lets_encrypt:
+		 accept_terms: true
+		 algo: secp384r1
+		 certfile: fullchain.pem
+		 keyfile: privkey.pem
+	 seconds: 300
+	 ```
+
+	 Add-on options can vary by version. Use the configuration fields shown by the installed add-on, and keep your DuckDNS token private.
+3. Configure Home Assistant to use the generated certificate by adding this to `configuration.yaml`:
+
+	 ```yaml
+	 http:
+		 ssl_certificate: /ssl/fullchain.pem
+		 ssl_key: /ssl/privkey.pem
+	 ```
+
+	 If you already have an `http:` section, add these options to it instead of creating a second section. Restart Home Assistant after the certificate is available.
+4. Configure your router to forward **TCP port 8123** to Home Assistant. Router instructions differ; use a fixed/reserved local IP for Home Assistant. Do not expose ports you do not need.
+5. From outside your home network, confirm that `https://my-home.duckdns.org:8123` opens and presents a valid certificate.
+6. In Home Assistant, set the **External URL** under **Settings → System → Network** to `https://my-home.duckdns.org:8123`.
+7. Add or reconfigure the Obedience integration. It will use this HTTPS URL for authorization and webhook callbacks instead of falling back to Home Assistant Cloud.
+
+Use a strong Home Assistant password, enable multi-factor authentication, and keep Home Assistant and its add-ons updated. For Home Assistant Container/Core or a setup that already uses a reverse proxy, use a dynamic-DNS updater and configure HTTPS at the reverse proxy instead; set Home Assistant's External URL to the proxy's HTTPS address. Do not configure both direct Home Assistant SSL and proxy TLS unless your proxy setup specifically requires it.
+
 ## 🚀 Installation
 
 ### HACS
