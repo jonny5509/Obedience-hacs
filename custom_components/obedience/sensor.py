@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -191,6 +193,37 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
     coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
     known_ids: set[str] = set()
 
+    def _remove_stale_entities() -> None:
+        registry = er.async_get(hass)
+        prefix = f"obedience_{entry.entry_id}_"
+        current_keys: set[str] = set()
+        for resource in RESOURCE_NAMES:
+            for obj in coordinator.data.get(resource, []):
+                if obj.get("id") is not None:
+                    current_keys.add(f"{resource}:{obj['id']}")
+
+        for entity in list(registry.entities.values()):
+            if (
+                entity.config_entry_id != entry.entry_id
+                or entity.platform != "sensor"
+                or not entity.unique_id
+                or not entity.unique_id.startswith(prefix)
+            ):
+                continue
+            if "_diagnostic_" in entity.unique_id:
+                continue
+            rest = entity.unique_id[len(prefix) :]
+            matched = False
+            for resource in RESOURCE_NAMES:
+                if rest.startswith(f"{resource}_"):
+                    obj_id = rest[len(resource) + 1 :]
+                    if f"{resource}:{obj_id}" in current_keys:
+                        matched = True
+                    break
+            if not matched:
+                with contextlib.suppress(Exception):
+                    registry.async_remove(entity.entity_id)
+
     def add_new_entities() -> None:
         entities = []
 
@@ -210,6 +243,8 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
         if entities:
             async_add_entities(entities)
+
+        _remove_stale_entities()
 
     add_new_entities()
 

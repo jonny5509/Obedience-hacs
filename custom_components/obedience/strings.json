@@ -17,5 +17,31 @@
       "no_external_url": "Home Assistant must have an HTTPS external URL configured before Obedience can be connected.",
       "auth_failed": "Obedience authorization did not return valid credentials."
     }
+  },
+  "issues": {
+    "webhook_registration_failed": {
+      "title": "Obedience webhook not registered",
+      "description": "Home Assistant could not register the Obedience webhook for {entry}. Real-time updates may be delayed until the next scheduled refresh. Check your HTTPS external URL and network connectivity, then reload the integration."
+    },
+    "no_external_url": {
+      "title": "Obedience has no HTTPS external URL",
+      "description": "No HTTPS external URL is configured for {entry}, so the Obedience webhook could not be registered. Configure an HTTPS external URL in Home Assistant and reload the integration."
+    }
+  },
+  "services": {
+    "increment_habit": {
+      "name": "Increment habit",
+      "description": "Increment or decrement an Obedience habit's amount.",
+      "fields": {
+        "habit_id": {
+          "name": "Habit ID",
+          "description": "The Obedience habit ID to change."
+        },
+        "amount": {
+          "name": "Amount",
+          "description": "Non-zero integer amount to change the habit by."
+        }
+      }
+    }
   }
 }

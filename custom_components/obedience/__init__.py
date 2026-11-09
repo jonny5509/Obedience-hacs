@@ -6,8 +6,10 @@ from typing import Any
 from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 
 from .api import ObedienceApi
 from .const import CONF_EXTENSION_ID, CONF_POLL_INTERVAL, CONF_SECRET, DOMAIN, PLATFORMS
@@ -20,6 +22,22 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> None:
     hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
     async_register_views(hass)
+
+    async def _handle_increment_habit(call) -> None:
+        habit_id = call.data["habit_id"]
+        amount = call.data["amount"]
+        coordinators = hass.data.get(DOMAIN, {}).get("coordinators", {})
+        for coordinator in coordinators.values():
+            if any(
+                str(habit.get("id")) == str(habit_id)
+                for habit in coordinator.data.get("habits", [])
+            ):
+                await coordinator.api.increment_habit(str(habit_id), int(amount))
+                await coordinator.async_request_refresh()
+                return
+        raise HomeAssistantError(f"Unknown Obedience habit id: {habit_id}")
+
+    hass.services.async_register(DOMAIN, "increment_habit", _handle_increment_habit)
     return None
 
 
@@ -58,16 +76,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         try:
             await api.configure_webhook(webhook_url)
+            ir.async_delete_issue(
+                hass, DOMAIN, f"webhook_registration_failed_{entry.entry_id}"
+            )
+            ir.async_delete_issue(hass, DOMAIN, f"no_external_url_{entry.entry_id}")
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
                 "Could not register the Obedience webhook for %s: %s",
                 entry.entry_id,
                 err,
             )
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                f"webhook_registration_failed_{entry.entry_id}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="webhook_registration_failed",
+                translation_placeholders={"entry": entry.title},
+            )
     else:
         _LOGGER.warning(
             "Obedience webhook not registered: no HTTPS external URL for entry %s",
             entry.entry_id,
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"no_external_url_{entry.entry_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="no_external_url",
+            translation_placeholders={"entry": entry.title},
         )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -79,6 +119,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         hass.data.get(DOMAIN, {}).get("coordinators", {}).pop(entry.entry_id, None)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    ir.async_delete_issue(hass, DOMAIN, f"webhook_registration_failed_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, f"no_external_url_{entry.entry_id}")
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

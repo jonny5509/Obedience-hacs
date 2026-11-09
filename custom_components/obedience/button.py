@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -82,6 +84,29 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
     coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
     known_ids: set[str] = set()
 
+    def _remove_stale_buttons() -> None:
+        registry = er.async_get(hass)
+        prefix = f"obedience_{entry.entry_id}_habit_"
+        current_ids = {
+            str(habit.get("id"))
+            for habit in coordinator.data.get("habits", [])
+            if habit.get("id") is not None
+        }
+        for entity in list(registry.entities.values()):
+            if (
+                entity.config_entry_id != entry.entry_id
+                or entity.platform != "button"
+                or not entity.unique_id
+                or not entity.unique_id.startswith(prefix)
+            ):
+                continue
+            rest = entity.unique_id[len(prefix) :]
+            # rest = {habit_id}_{direction}
+            habit_id = rest.rsplit("_", 1)[0]
+            if habit_id not in current_ids:
+                with contextlib.suppress(Exception):
+                    registry.async_remove(entity.entity_id)
+
     def add_new_entities() -> None:
         entities = []
 
@@ -104,6 +129,8 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
         if entities:
             async_add_entities(entities)
+
+        _remove_stale_buttons()
 
     add_new_entities()
 
