@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -16,20 +17,26 @@ RESOURCE_NAMES = {
     "relationships": "Relationship",
 }
 
+# Keys that are too large / noisy to expose as state attributes by default.
+_LARGE_ATTRIBUTE_KEYS = {"history", "notes"}
+
 
 class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntity):
     _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(
         self,
         coordinator: ObedienceCoordinator,
         resource: str,
         obj: dict[str, Any],
+        entry_id: str,
     ) -> None:
         super().__init__(coordinator)
         self.resource = resource
         self.obj_id = str(obj["id"])
-        self._attr_unique_id = f"obedience_{resource}_{self.obj_id}"
+        self._entry_id = entry_id
+        self._attr_unique_id = f"obedience_{entry_id}_{resource}_{self.obj_id}"
 
     def _current_object(self) -> dict[str, Any] | None:
         return next(
@@ -57,6 +64,25 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         return None
 
     @property
+    def device_info(self) -> DeviceInfo:
+        entry = getattr(self.coordinator, "config_entry", None)
+        identifiers = (
+            {(DOMAIN, entry.entry_id)}
+            if entry is not None
+            else {(DOMAIN, self._entry_id)}
+        )
+        name = "Obedience"
+        if entry is not None and getattr(entry, "unique_id", None):
+            name = f"Obedience ({entry.unique_id})"
+        return DeviceInfo(
+            identifiers=identifiers,
+            name=name,
+            manufacturer="Obedience",
+            model="Obedience account",
+            entry_type=dr.DeviceEntryType.SERVICE,
+        )
+
+    @property
     def name(self) -> str:
         obj = self._current_object()
 
@@ -80,9 +106,9 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
             return None
 
         if self.resource == "relationships":
-            return obj.get("reward", 0)
+            return obj.get("reward")
 
-        return obj.get("amount", 0)
+        return obj.get("amount")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -90,12 +116,15 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         if obj is None:
             return {}
 
-        attributes = dict(obj)
+        attributes: dict[str, Any] = {}
+        for key, value in obj.items():
+            if key in _LARGE_ATTRIBUTE_KEYS:
+                continue
+            attributes[key] = value
 
         if self.resource == "relationships":
             attributes["nickname"] = self._relationship_nickname(obj)
 
-        attributes["api_data"] = dict(obj)
         return attributes
 
     @property
@@ -108,21 +137,41 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
         }[self.resource]
 
 
-class ObedienceDiagnosticSensor(
-    CoordinatorEntity[ObedienceCoordinator], SensorEntity
-):
+class ObedienceDiagnosticSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:database-search"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
         coordinator: ObedienceCoordinator,
         resource: str,
+        entry_id: str,
     ) -> None:
         super().__init__(coordinator)
         self.resource = resource
-        self._attr_unique_id = f"obedience_diagnostic_{resource}"
+        self._entry_id = entry_id
+        self._attr_unique_id = f"obedience_{entry_id}_diagnostic_{resource}"
         self._attr_name = f"API {RESOURCE_NAMES[resource]}s"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        entry = getattr(self.coordinator, "config_entry", None)
+        identifiers = (
+            {(DOMAIN, entry.entry_id)}
+            if entry is not None
+            else {(DOMAIN, self._entry_id)}
+        )
+        name = "Obedience"
+        if entry is not None and getattr(entry, "unique_id", None):
+            name = f"Obedience ({entry.unique_id})"
+        return DeviceInfo(
+            identifiers=identifiers,
+            name=name,
+            manufacturer="Obedience",
+            model="Obedience account",
+            entry_type=dr.DeviceEntryType.SERVICE,
+        )
 
     @property
     def native_value(self) -> int:
@@ -134,12 +183,7 @@ class ObedienceDiagnosticSensor(
         return {
             "resource": self.resource,
             "count": len(objects),
-            "ids": [
-                str(obj.get("id"))
-                for obj in objects
-                if obj.get("id") is not None
-            ],
-            "api_objects": json.dumps(objects, default=str),
+            "ids": [str(obj.get("id")) for obj in objects if obj.get("id") is not None],
         }
 
 
@@ -160,7 +204,9 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                     continue
 
                 known_ids.add(key)
-                entities.append(ObedienceObjectSensor(coordinator, resource, obj))
+                entities.append(
+                    ObedienceObjectSensor(coordinator, resource, obj, entry.entry_id)
+                )
 
         if entities:
             async_add_entities(entities)
@@ -169,11 +215,9 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
     async_add_entities(
         [
-            ObedienceDiagnosticSensor(coordinator, resource)
+            ObedienceDiagnosticSensor(coordinator, resource, entry.entry_id)
             for resource in RESOURCE_NAMES
         ]
     )
 
-    entry.async_on_unload(
-        coordinator.async_add_listener(add_new_entities)
-    )
+    entry.async_on_unload(coordinator.async_add_listener(add_new_entities))

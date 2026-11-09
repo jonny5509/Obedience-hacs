@@ -1,26 +1,48 @@
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import aiohttp_client
+from homeassistant.helpers import entity_registry as er
 
 from .api import ObedienceApi
-from .const import CONF_EXTENSION_ID, CONF_SECRET, DOMAIN, PLATFORMS
+from .const import CONF_EXTENSION_ID, CONF_POLL_INTERVAL, CONF_SECRET, DOMAIN, PLATFORMS
 from .coordinator import ObedienceCoordinator
 from .webhook import async_register_views
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+_LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> None:
     hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
     async_register_views(hass)
-    return True
+    return None
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
+
     session = aiohttp_client.async_get_clientsession(hass)
     api = ObedienceApi(session, entry.data[CONF_EXTENSION_ID], entry.data[CONF_SECRET])
-    coordinator = ObedienceCoordinator(hass, api)
+
+    poll_interval = entry.options.get(CONF_POLL_INTERVAL, 15)
+    coordinator = ObedienceCoordinator(
+        hass, api, config_entry=entry, poll_interval=poll_interval
+    )
     await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     external_url = hass.config.external_url
     if not external_url or not external_url.startswith("https://"):
@@ -30,16 +52,70 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             external_url = None
 
     if external_url and external_url.startswith("https://"):
-        webhook_url = f"{external_url.rstrip('/')}/api/obedience/webhook/{entry.data[CONF_EXTENSION_ID]}"
+        webhook_url = (
+            f"{external_url.rstrip('/')}/api/obedience/webhook/"
+            f"{entry.data[CONF_EXTENSION_ID]}"
+        )
         try:
             await api.configure_webhook(webhook_url)
-        except Exception:
-            pass
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not register the Obedience webhook for %s: %s",
+                entry.entry_id,
+                err,
+            )
+    else:
+        _LOGGER.warning(
+            "Obedience webhook not registered: no HTTPS external URL for entry %s",
+            entry.entry_id,
+        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
+    if unloaded:
+        hass.data.get(DOMAIN, {}).get("coordinators", {}).pop(entry.entry_id, None)
     return unloaded
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if entry.version > 2:
+        return False
+
+    if entry.version < 2:
+        entity_registry = er.async_get(hass)
+        for entity in list(entity_registry.entities.values()):
+            if entity.config_entry_id != entry.entry_id or entity.platform != DOMAIN:
+                continue
+            unique_id = entity.unique_id
+            if not unique_id:
+                continue
+            new_unique_id: str | None = None
+            if unique_id.startswith("obedience_diagnostic_"):
+                new_unique_id = (
+                    f"obedience_{entry.entry_id}_diagnostic_"
+                    f"{unique_id[len('obedience_diagnostic_') :]}"
+                )
+            elif unique_id.startswith("obedience_habit_"):
+                new_unique_id = (
+                    f"obedience_{entry.entry_id}_habit_"
+                    f"{unique_id[len('obedience_habit_') :]}"
+                )
+            elif unique_id.startswith("obedience_"):
+                new_unique_id = (
+                    f"obedience_{entry.entry_id}_{unique_id[len('obedience_') :]}"
+                )
+            if new_unique_id and new_unique_id != unique_id:
+                try:
+                    entity_registry.async_update_entity(
+                        entity.entity_id, new_unique_id=new_unique_id
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("Could not migrate unique id %s: %s", unique_id, err)
+
+        hass.config_entries.async_update_entry(entry, version=2, minor_version=0)
+
+    return True
