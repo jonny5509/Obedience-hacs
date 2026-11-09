@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from urllib.parse import urlencode
 
@@ -7,19 +8,51 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.core import callback
+from homeassistant.helpers import aiohttp_client
 
-from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN, NAME
+from .api import ObedienceApi
+from .const import (
+    CONF_EXTENSION_ID,
+    CONF_POLL_INTERVAL,
+    CONF_SECRET,
+    CONF_UID,
+    DOMAIN,
+    NAME,
+)
 from .webhook import async_register_views
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 2
+    MINOR_VERSION = 0
 
     def __init__(self) -> None:
         self._auth_data: dict[str, str] | None = None
 
+    def _cleanup_stale_pending(self) -> None:
+        pending = self.hass.data.get(DOMAIN, {}).get("pending", {})
+        try:
+            active_flow_ids = {
+                flow["flow_id"]
+                for flow in self.hass.config_entries.flow.async_progress(
+                    include_uninitialized=True
+                )
+            }
+        except TypeError:
+            active_flow_ids = {
+                flow["flow_id"]
+                for flow in self.hass.config_entries.flow.async_progress()
+            }
+        for extension_id, flow_id in list(pending.items()):
+            if flow_id not in active_flow_ids:
+                pending.pop(extension_id, None)
+
     async def _async_start_authorization(self):
         async_register_views(self.hass)
+
+        self._cleanup_stale_pending()
 
         external_url = self.hass.config.external_url
         if not external_url or not external_url.startswith("https://"):
@@ -39,15 +72,12 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         hass_data["pending"][extension_id] = self.flow_id
 
         callback_url = f"{external_url.rstrip('/')}/api/obedience/callback"
-        auth_url = (
-            "https://app.obedienceapp.com/home/extension-request?"
-            + urlencode(
-                {
-                    "id": extension_id,
-                    "name": NAME,
-                    "redirect": callback_url,
-                }
-            )
+        auth_url = "https://app.obedienceapp.com/home/extension-request?" + urlencode(
+            {
+                "id": extension_id,
+                "name": NAME,
+                "redirect": callback_url,
+            }
         )
 
         return self.async_external_step(step_id="user", url=auth_url)
@@ -58,6 +88,9 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input=None):
         return await self._async_handle_authorization(user_input)
 
+    async def async_step_reauth(self, entry_data=None):
+        return await self._async_start_authorization()
+
     async def _async_handle_authorization(self, user_input=None):
         if user_input is not None:
             self._auth_data = {
@@ -66,22 +99,44 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_UID: user_input[CONF_UID],
             }
 
-            if self.source == config_entries.SOURCE_RECONFIGURE:
-                return self.async_external_step_done(next_step_id="finish")
-
             return self.async_external_step_done(next_step_id="finish")
 
         return await self._async_start_authorization()
+
+    async def _validate_credentials(self) -> bool:
+        if not self._auth_data:
+            return False
+        session = aiohttp_client.async_get_clientsession(self.hass)
+        api = ObedienceApi(
+            session,
+            self._auth_data[CONF_EXTENSION_ID],
+            self._auth_data[CONF_SECRET],
+        )
+        try:
+            await api.async_validate()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Obedience credential validation failed: %s", err)
+            return False
+        return True
 
     async def async_step_finish(self, user_input=None):
         if not self._auth_data:
             return self.async_abort(reason="auth_failed")
 
-        if self.source == config_entries.SOURCE_RECONFIGURE:
+        if not await self._validate_credentials():
+            return self.async_abort(reason="auth_failed")
+
+        if self.source in (
+            config_entries.SOURCE_RECONFIGURE,
+            config_entries.SOURCE_REAUTH,
+        ):
             entry = self._get_reconfigure_entry()
-            await self.async_set_unique_id(entry.unique_id)
+            uid = self._auth_data[CONF_UID]
+            await self.async_set_unique_id(uid)
             return self.async_update_reload_and_abort(
                 entry,
+                unique_id=uid,
+                title=f"Obedience ({uid})",
                 data_updates=self._auth_data,
             )
 
@@ -90,7 +145,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
 
         return self.async_create_entry(
-            title="Obedience",
+            title=f"Obedience ({uid})",
             data=self._auth_data,
         )
 
@@ -108,7 +163,7 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
 
         return self.async_create_entry(
-            title="Obedience",
+            title=f"Obedience ({uid})",
             data={
                 CONF_EXTENSION_ID: user_input[CONF_EXTENSION_ID],
                 CONF_SECRET: user_input[CONF_SECRET],
@@ -119,4 +174,15 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class ObedienceOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({}))
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current = self.config_entry.options.get(CONF_POLL_INTERVAL, 15)
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_POLL_INTERVAL, default=current): vol.All(
+                    vol.Coerce(int), vol.Range(min=5, max=120)
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)

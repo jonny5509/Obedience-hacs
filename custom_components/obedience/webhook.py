@@ -3,14 +3,24 @@ from __future__ import annotations
 import base64
 import hmac
 import json
+import logging
 
 from aiohttp import web
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from homeassistant.components.http import HomeAssistantView
-from homeassistant.data_entry_flow import FlowResultType
 
 from .const import CONF_EXTENSION_ID, CONF_SECRET, CONF_UID, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
+
+PUBLIC_KEY = b"""-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDWZ6RbZ5cBGzxbe0/1/pJGkA62
+JD4VREffIRfWHYHO+AE5P6EEis487pnLRR7eG5E+OvlYjtUVDF9eyuS866WR6L1h
+C9N8hCV/N3ew2anTamfhNO7RIRRzMrFOz1wxJH9A+aEJVnuGg3SeRYzKWW7LPZ0Q
+aP/+Yu9hK3pUPc1YCwIDAQAB
+-----END PUBLIC KEY-----"""
+
 
 def async_register_views(hass) -> None:
     """Register HTTP views before the config entry exists."""
@@ -20,14 +30,6 @@ def async_register_views(hass) -> None:
     hass.http.register_view(ObedienceCallbackView)
     hass.http.register_view(ObedienceWebhookView)
     hass.data[key] = True
-
-
-PUBLIC_KEY = b"""-----BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDWZ6RbZ5cBGzxbe0/1/pJGkA62
-JD4VREffIRfWHYHO+AE5P6EEis487pnLRR7eG5E+OvlYjtUVDF9eyuS866WR6L1h
-C9N8hCV/N3ew2anTamfhNO7RIRRzMrFOz1wxJH9A+aEJVnuGg3SeRYzKWW7LPZ0Q
-aP/+Yu9hK3pUPc1YCwIDAQAB
------END PUBLIC KEY-----"""
 
 
 class ObedienceCallbackView(HomeAssistantView):
@@ -42,7 +44,7 @@ class ObedienceCallbackView(HomeAssistantView):
         uid = request.query.get("uid")
 
         pending = hass.data.get(DOMAIN, {}).get("pending", {})
-        flow_id = pending.get(extension_id)
+        flow_id = pending.get(extension_id) if extension_id else None
 
         if not flow_id or not extension_id or not secret or not uid:
             return web.Response(
@@ -59,18 +61,18 @@ class ObedienceCallbackView(HomeAssistantView):
                     CONF_UID: uid,
                 },
             )
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Obedience authorization callback failed: %s", err)
             return web.Response(
                 status=500,
-                text=f"Home Assistant could not complete the Obedience authorization: {err}",
+                text="Home Assistant could not complete the Obedience authorization.",
             )
 
-        result_type = result.get("type")
-        expected_type = FlowResultType.EXTERNAL_STEP_DONE
-        if result_type not in (expected_type, expected_type.value, "external_done"):
+        result_type = result.get("type") if isinstance(result, dict) else None
+        if result_type not in ("external_done", "external_step_done"):
             return web.Response(
                 status=500,
-                text=f"Unexpected authorization flow result: {result['type']}",
+                text="Unexpected authorization flow result.",
             )
 
         pending.pop(extension_id, None)
@@ -93,9 +95,13 @@ class ObedienceWebhookView(HomeAssistantView):
     async def post(self, request: web.Request, extension_id: str) -> web.Response:
         hass = request.app["hass"]
         body = await request.read()
+
         try:
             payload = json.loads(body)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return web.Response(status=400, text="Invalid JSON")
+
+        if not isinstance(payload, dict):
             return web.Response(status=400, text="Invalid JSON")
 
         coordinator = next(
@@ -106,9 +112,15 @@ class ObedienceWebhookView(HomeAssistantView):
             ),
             None,
         )
-        if coordinator is None or not hmac.compare_digest(
-            payload.get("secret", ""), coordinator.api.secret
+        if coordinator is None:
+            return web.Response(status=404, text="Unknown extension")
+
+        if not hmac.compare_digest(
+            str(payload.get("secret", "")), coordinator.api.secret
         ):
+            return web.Response(status=401, text="Unauthorized")
+
+        if payload.get("extensionId") not in (None, extension_id):
             return web.Response(status=401, text="Unauthorized")
 
         signature = request.headers.get("X-Signature")
@@ -124,7 +136,15 @@ class ObedienceWebhookView(HomeAssistantView):
                 hashes.SHA256(),
             )
         except Exception:
+            _LOGGER.debug("Invalid Obedience webhook signature", exc_info=True)
             return web.Response(status=401, text="Invalid signature")
 
-        await coordinator.async_request_refresh()
+        # Respond quickly; refresh in the background to respect the 10s timeout.
+        async def _refresh() -> None:
+            try:
+                await coordinator.async_request_refresh()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Obedience webhook refresh failed: %s", err)
+
+        hass.async_create_task(_refresh())
         return web.Response(status=204)

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ObedienceCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ObedienceHabitButton(CoordinatorEntity[ObedienceCoordinator], ButtonEntity):
@@ -18,16 +22,37 @@ class ObedienceHabitButton(CoordinatorEntity[ObedienceCoordinator], ButtonEntity
         coordinator: ObedienceCoordinator,
         habit: dict[str, Any],
         amount: int,
+        entry_id: str,
     ) -> None:
         super().__init__(coordinator)
         self.habit_id = str(habit["id"])
         self.amount = amount
+        self._entry_id = entry_id
         self._last_error: str | None = None
 
         direction = "increase" if amount > 0 else "decrease"
-        self._attr_unique_id = f"obedience_habit_{self.habit_id}_{direction}"
+        self._attr_unique_id = f"obedience_{entry_id}_habit_{self.habit_id}_{direction}"
         self._attr_name = f"{direction.title()} {habit.get('name', self.habit_id)}"
         self._attr_icon = "mdi:plus-circle" if amount > 0 else "mdi:minus-circle"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        entry = getattr(self.coordinator, "config_entry", None)
+        identifiers = (
+            {(DOMAIN, entry.entry_id)}
+            if entry is not None
+            else {(DOMAIN, self._entry_id)}
+        )
+        name = "Obedience"
+        if entry is not None and getattr(entry, "unique_id", None):
+            name = f"Obedience ({entry.unique_id})"
+        return DeviceInfo(
+            identifiers=identifiers,
+            name=name,
+            manufacturer="Obedience",
+            model="Obedience account",
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -42,10 +67,12 @@ class ObedienceHabitButton(CoordinatorEntity[ObedienceCoordinator], ButtonEntity
     async def async_press(self) -> None:
         try:
             await self.coordinator.api.increment_habit(self.habit_id, self.amount)
-        except HomeAssistantError as err:
+        except Exception as err:
             self._last_error = str(err)
             self.async_write_ha_state()
-            raise
+            if isinstance(err, HomeAssistantError):
+                raise
+            raise HomeAssistantError(str(err)) from err
 
         self._last_error = None
         await self.coordinator.async_request_refresh()
@@ -71,7 +98,9 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                     continue
 
                 known_ids.add(key)
-                entities.append(ObedienceHabitButton(coordinator, habit, amount))
+                entities.append(
+                    ObedienceHabitButton(coordinator, habit, amount, entry.entry_id)
+                )
 
         if entities:
             async_add_entities(entities)
