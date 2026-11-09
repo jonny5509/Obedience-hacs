@@ -113,6 +113,10 @@ Supported object types include:
 
 For habits where the API permits changes, Home Assistant can expose increase/decrease controls.
 
+## 🛠️ Services
+
+The integration registers the `obedience.increment_habit` service, which accepts `habit_id` and `amount` (a non-zero integer) and can be used in automations and scripts.
+
 ## ⚡ Webhooks
 
 The integration registers an Obedience webhook automatically and uses it for near-real-time refreshes.

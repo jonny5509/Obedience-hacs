@@ -1,0 +1,22 @@
+increment_habit:
+  name: Increment habit
+  description: Increment or decrement an Obedience habit's amount.
+  fields:
+    habit_id:
+      name: Habit ID
+      description: The Obedience habit ID to change.
+      required: true
+      example: "abc123"
+      selector:
+        text:
+    amount:
+      name: Amount
+      description: Non-zero integer amount to change the habit by.
+      required: true
+      default: 1
+      selector:
+        number:
+          min: -100
+          max: 100
+          step: 1
+          mode: box
