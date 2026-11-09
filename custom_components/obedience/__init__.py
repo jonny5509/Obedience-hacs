@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import homeassistant.helpers.config_validation as cv
 from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -17,6 +18,8 @@ from .coordinator import ObedienceCoordinator
 from .webhook import async_register_views
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -38,7 +41,6 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> None:
         raise HomeAssistantError(f"Unknown Obedience habit id: {habit_id}")
 
     hass.services.async_register(DOMAIN, "increment_habit", _handle_increment_habit)
-    return None
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
