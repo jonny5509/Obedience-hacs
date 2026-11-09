@@ -1,23 +1,23 @@
 {
   "domain": "obedience",
   "name": "Obedience",
-  "version": "2.3.0",
-  "documentation": "https://github.com/jonny5509/Obedience-hacs",
-  "issue_tracker": "https://github.com/jonny5509/Obedience-hacs/issues",
-  "dependencies": [
-    "cloud",
-    "http"
+  "categories": [
+    "productivity_information"
   ],
   "codeowners": [
     "@jonny5509"
   ],
-  "categories": [
-    "productivity_information"
-  ],
   "config_flow": true,
-  "iot_class": "cloud_push",
+  "dependencies": [
+    "cloud",
+    "http"
+  ],
+  "documentation": "https://github.com/jonny5509/Obedience-hacs",
   "integration_type": "hub",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/jonny5509/Obedience-hacs/issues",
   "loggers": [
     "obedience"
-  ]
+  ],
+  "version": "2.3.0"
 }
