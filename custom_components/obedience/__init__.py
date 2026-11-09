@@ -22,9 +22,10 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> None:
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
     async_register_views(hass)
+    return True
 
     async def _handle_increment_habit(call) -> None:
         habit_id = call.data["habit_id"]
