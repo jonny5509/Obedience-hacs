@@ -6,7 +6,6 @@ from urllib.parse import urlencode
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
 from homeassistant.core import callback
 from homeassistant.helpers import aiohttp_client
 
@@ -19,6 +18,7 @@ from .const import (
     DOMAIN,
     NAME,
 )
+from .util import find_https_external_url
 from .webhook import async_register_views
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,14 +54,8 @@ class ObedienceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._cleanup_stale_pending()
 
-        external_url = self.hass.config.external_url
-        if not external_url or not external_url.startswith("https://"):
-            try:
-                external_url = async_remote_ui_url(self.hass)
-            except CloudNotAvailable:
-                external_url = None
-
-        if not external_url or not external_url.startswith("https://"):
+        external_url = find_https_external_url(self.hass)
+        if not external_url:
             return self.async_abort(reason="no_external_url")
 
         extension_id = str(uuid.uuid4())

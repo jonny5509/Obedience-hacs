@@ -21,7 +21,7 @@
   "issues": {
     "webhook_registration_failed": {
       "title": "Obedience webhook not registered",
-      "description": "Home Assistant could not register the Obedience webhook for {entry}. Real-time updates may be delayed until the next scheduled refresh. Check your HTTPS external URL and network connectivity, then reload the integration."
+      "description": "Home Assistant could not register the Obedience webhook for {entry}. Real-time updates may be delayed until the next scheduled refresh. Check your HTTPS external URL and network connectivity, then reload the integration. The exact error is recorded in the Home Assistant log."
     },
     "no_external_url": {
       "title": "Obedience has no HTTPS external URL",

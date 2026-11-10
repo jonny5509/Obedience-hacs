@@ -4,8 +4,7 @@ import logging
 from typing import Any
 
 import homeassistant.helpers.config_validation as cv
-from homeassistant.components.cloud import CloudNotAvailable, async_remote_ui_url
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryAuthFailed
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import aiohttp_client
@@ -15,6 +14,7 @@ from homeassistant.helpers import issue_registry as ir
 from .api import ObedienceApi
 from .const import CONF_EXTENSION_ID, CONF_POLL_INTERVAL, CONF_SECRET, DOMAIN, PLATFORMS
 from .coordinator import ObedienceCoordinator
+from .util import find_https_external_url
 from .webhook import async_register_views
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
     async_register_views(hass)
-    return True
 
     async def _handle_increment_habit(call) -> None:
         habit_id = call.data["habit_id"]
@@ -42,6 +41,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         raise HomeAssistantError(f"Unknown Obedience habit id: {habit_id}")
 
     hass.services.async_register(DOMAIN, "increment_habit", _handle_increment_habit)
+    return True
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -65,29 +65,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    external_url = hass.config.external_url
-    if not external_url or not external_url.startswith("https://"):
-        try:
-            external_url = async_remote_ui_url(hass)
-        except CloudNotAvailable:
-            external_url = None
+    external_url = find_https_external_url(hass)
 
-    if external_url and external_url.startswith("https://"):
+    if external_url:
         webhook_url = (
             f"{external_url.rstrip('/')}/api/obedience/webhook/"
             f"{entry.data[CONF_EXTENSION_ID]}"
         )
         try:
             await api.configure_webhook(webhook_url)
-            ir.async_delete_issue(
-                hass, DOMAIN, f"webhook_registration_failed_{entry.entry_id}"
-            )
-            ir.async_delete_issue(hass, DOMAIN, f"no_external_url_{entry.entry_id}")
-        except Exception as err:  # noqa: BLE001
+        except ConfigEntryAuthFailed:
+            # Bad credentials: let Home Assistant start the reauth flow.
+            raise
+        except Exception as err:
             _LOGGER.warning(
                 "Could not register the Obedience webhook for %s: %s",
-                entry.entry_id,
+                entry.title,
                 err,
+                exc_info=True,
             )
             ir.async_create_issue(
                 hass,
@@ -98,6 +93,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 translation_key="webhook_registration_failed",
                 translation_placeholders={"entry": entry.title},
             )
+        else:
+            ir.async_delete_issue(
+                hass, DOMAIN, f"webhook_registration_failed_{entry.entry_id}"
+            )
+            ir.async_delete_issue(hass, DOMAIN, f"no_external_url_{entry.entry_id}")
     else:
         _LOGGER.warning(
             "Obedience webhook not registered: no HTTPS external URL for entry %s",

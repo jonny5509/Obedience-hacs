@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 from aiohttp import ClientSession, ClientTimeout
@@ -31,6 +32,7 @@ class ObedienceApi:
             }
         )
 
+        allow_non_json = kwargs.pop("allow_non_json", False)
         timeout = kwargs.pop("timeout", ClientTimeout(total=30))
 
         async with asyncio.timeout(30):
@@ -70,11 +72,20 @@ class ObedienceApi:
                 if response.status == 204:
                     return None
 
+                text = await response.text()
+                if not text.strip():
+                    # Successful response with no body (e.g. webhook registration).
+                    return None
+
                 try:
-                    return await response.json(content_type=None)
-                except Exception as err:
+                    return json.loads(text)
+                except json.JSONDecodeError as err:
+                    if allow_non_json:
+                        # Some endpoints answer 200 with plain text such as "OK".
+                        return text
                     raise HomeAssistantError(
-                        f"Obedience API returned an invalid JSON response: {err}"
+                        f"Obedience API returned an invalid JSON response"
+                        f" (HTTP {response.status}): {err}"
                     ) from err
 
     async def async_validate(self) -> None:
@@ -121,6 +132,7 @@ class ObedienceApi:
         return await self._request(
             "POST",
             "webhook",
+            allow_non_json=True,
             json={
                 "url": webhook_url,
                 "habits": True,
