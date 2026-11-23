@@ -1,0 +1,47 @@
+name: Build HACS Release ZIP
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and attach HACS ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Validate release version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python -c 'import json; print(json.load(open("custom_components/obedience/manifest.json"))["version"])')"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Release tag v$TAG does not match manifest version $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build HACS ZIP
+        shell: bash
+        run: |
+          test -d custom_components/obedience
+          cd custom_components
+          zip -r ../obedience.zip obedience \
+            -x 'obedience/__pycache__/*' 'obedience/**/*.pyc' 'obedience/.pytest_cache/*'
+          cd ..
+          unzip -l obedience.zip
+
+      - name: Attach ZIP to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: obedience.zip
+          fail_on_unmatched_files: true
