@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.5.1
+
+### Fixed
+- Corrected the HACS release ZIP layout so integration files are at the archive root and can be extracted into the integration directory.
+
+### Improved
+- Consolidated release ZIP generation into one workflow and added a manual workflow-dispatch option for rebuilding a ZIP from a selected release tag.
+- Applied Ruff formatting fixes.
+
 ## 2.5.0
 
 ### Added
