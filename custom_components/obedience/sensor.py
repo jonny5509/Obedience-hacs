@@ -133,7 +133,9 @@ class ObedienceObjectSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntit
             last = history[-1] if history else None
             if isinstance(last, dict):
                 attrs["last_history_amount"] = last.get("amount")
-                attrs["last_history_reason"] = self._truncate_text(last.get("reason"), 200)
+                attrs["last_history_reason"] = self._truncate_text(
+                    last.get("reason"), 200
+                )
                 attrs["last_history_manual"] = last.get("manual")
                 date = last.get("date")
                 if isinstance(date, dict):
@@ -241,7 +243,9 @@ class ObedienceHabitMetricSensor(CoordinatorEntity[ObedienceCoordinator], Sensor
         self.habit_id = str(habit["id"])
         self._entry_id = entry_id
         self.metric = metric
-        self._attr_unique_id = f"obedience_{entry_id}_habit_metric_{self.habit_id}_{metric}"
+        self._attr_unique_id = (
+            f"obedience_{entry_id}_habit_metric_{self.habit_id}_{metric}"
+        )
         names = {
             "goal": "Goal",
             "remaining": "Remaining to goal",
@@ -260,9 +264,7 @@ class ObedienceHabitMetricSensor(CoordinatorEntity[ObedienceCoordinator], Sensor
     @property
     def name(self) -> str:
         habit = self._current_habit()
-        habit_name = (
-            habit.get("name", self.habit_id) if habit else self.habit_id
-        )
+        habit_name = habit.get("name", self.habit_id) if habit else self.habit_id
         return f"{habit_name} {self._metric_names.get(self.metric, self.metric)}"
 
     def _current_habit(self) -> dict[str, Any] | None:
@@ -335,7 +337,9 @@ class ObedienceHabitMetricSensor(CoordinatorEntity[ObedienceCoordinator], Sensor
         }
 
 
-class ObedienceRewardMetricSensor(CoordinatorEntity[ObedienceCoordinator], SensorEntity):
+class ObedienceRewardMetricSensor(
+    CoordinatorEntity[ObedienceCoordinator], SensorEntity
+):
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -350,7 +354,9 @@ class ObedienceRewardMetricSensor(CoordinatorEntity[ObedienceCoordinator], Senso
         self.reward_id = str(reward["id"])
         self._entry_id = entry_id
         self.metric = metric
-        self._attr_unique_id = f"obedience_{entry_id}_reward_metric_{self.reward_id}_{metric}"
+        self._attr_unique_id = (
+            f"obedience_{entry_id}_reward_metric_{self.reward_id}_{metric}"
+        )
         self._attr_icon = "mdi:cash" if metric == "cost" else "mdi:counter"
 
     def _current_reward(self) -> dict[str, Any] | None:
@@ -450,7 +456,10 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
             if rest.startswith("habit_metric_"):
                 metric_rest = rest[len("habit_metric_") :]
                 parts = metric_rest.rsplit("_", 1)
-                if len(parts) == 2 and f"{parts[0]}:{parts[1]}" in current_habit_metric_keys:
+                if (
+                    len(parts) == 2
+                    and f"{parts[0]}:{parts[1]}" in current_habit_metric_keys
+                ):
                     continue
                 with contextlib.suppress(Exception):
                     registry.async_remove(entity.entity_id)
@@ -458,7 +467,10 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
             if rest.startswith("reward_metric_"):
                 metric_rest = rest[len("reward_metric_") :]
                 parts = metric_rest.rsplit("_", 1)
-                if len(parts) == 2 and f"{parts[0]}:{parts[1]}" in current_reward_metric_keys:
+                if (
+                    len(parts) == 2
+                    and f"{parts[0]}:{parts[1]}" in current_reward_metric_keys
+                ):
                     continue
                 with contextlib.suppress(Exception):
                     registry.async_remove(entity.entity_id)
@@ -486,7 +498,9 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
                 if key not in known_ids:
                     known_ids.add(key)
                     entities.append(
-                        ObedienceObjectSensor(coordinator, resource, obj, entry.entry_id)
+                        ObedienceObjectSensor(
+                            coordinator, resource, obj, entry.entry_id
+                        )
                     )
 
                 if resource == "habits":

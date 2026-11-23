@@ -71,6 +71,7 @@ async def _async_save_dedupe_store(hass) -> None:
             payload[ext_id] = entries[-_WEBHOOK_DEDUPE_MAX:]
     await store.async_save(payload)
 
+
 PUBLIC_KEY = b"""-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDWZ6RbZ5cBGzxbe0/1/pJGkA62
 JD4VREffIRfWHYHO+AE5P6EEis487pnLRR7eG5E+OvlYjtUVDF9eyuS866WR6L1h
@@ -227,7 +228,9 @@ class ObedienceWebhookView(HomeAssistantView):
         return web.Response(status=204)
 
     @staticmethod
-    def _async_handle_payload(hass, coordinator, extension_id: str, payload: dict) -> None:
+    def _async_handle_payload(
+        hass, coordinator, extension_id: str, payload: dict
+    ) -> None:
         """Apply webhook payload to coordinator data and fire an HA event."""
         obj_type = payload.get("type")
         resource = {
@@ -259,7 +262,11 @@ class ObedienceWebhookView(HomeAssistantView):
                 if not replaced:
                     items.append(after)
                 changed = True
-            elif after is None and isinstance(before, dict) and before.get("id") is not None:
+            elif (
+                after is None
+                and isinstance(before, dict)
+                and before.get("id") is not None
+            ):
                 before_id = str(before["id"])
                 new_items = [item for item in items if str(item.get("id")) != before_id]
                 if len(new_items) != len(items):
