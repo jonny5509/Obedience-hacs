@@ -119,7 +119,9 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
             if habit_id in known_ids:
                 continue
             known_ids.add(habit_id)
-            entities.append(ObedienceHabitPositiveBinarySensor(coordinator, habit, entry.entry_id))
+            entities.append(
+                ObedienceHabitPositiveBinarySensor(coordinator, habit, entry.entry_id)
+            )
         if entities:
             async_add_entities(entities)
         _remove_stale_entities()
