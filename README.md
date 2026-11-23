@@ -11,9 +11,12 @@ The integration connects your Obedience account to Home Assistant, exposes suppo
 
 - 🔐 Official Obedience authorization flow
 - 📥 Import accessible habits, rewards, punishments, and relationships
-- 📊 Expose supported API objects as Home Assistant sensors
+- 📊 Expose supported API objects as Home Assistant sensors, plus habit goal/remaining/progress and reward cost sensors
+- ✅ Expose habit positive/negative state as a binary sensor
 - 🎛️ Increase/decrease habits through Home Assistant when supported by the API
 - ⚡ Automatically register an Obedience webhook for near-real-time refreshes
+- 🔔 Fire Home Assistant `obedience_webhook` events with webhook `before`/`after` payloads for automations
+- ⚙️ Configure polling interval and webhook resource subscriptions from integration options
 - 🛡️ Verify webhook signatures using Obedience's public RSA key
 - 🔑 Store the extension ID and per-user secret in the Home Assistant config entry rather than your Obedience password
 
@@ -111,17 +114,19 @@ Supported object types include:
 - Punishments
 - Relationships
 
+Relationship sensors expose reward points as state and include bounded summary attributes for recent history and note plain text. Large raw `history` and `notes` payloads are not exposed as default attributes.
+
 For habits where the API permits changes, Home Assistant can expose increase/decrease controls.
 
 ## 🛠️ Services
 
-The integration registers the `obedience.increment_habit` service, which accepts `habit_id` and `amount` (a non-zero integer) and can be used in automations and scripts.
+The integration registers the `obedience.increment_habit` service, which accepts `amount` (a non-zero integer) and either `habit_id` or an Obedience habit `entity_id`, and can be used in automations and scripts. The service supports optional response data with the resolved habit/entry/result.
 
 ## ⚡ Webhooks
 
 The integration registers an Obedience webhook automatically and uses it for near-real-time refreshes.
 
-Incoming webhook signatures are verified using Obedience's public RSA key before webhook data is accepted.
+Incoming webhook signatures are verified using Obedience's public RSA key before webhook data is accepted. When a valid webhook is received, the integration updates the affected coordinator object immediately and fires an `obedience_webhook` event on the Home Assistant event bus with `entry_id`, `type`, `resource`, `extension_id`, `object_id`, `before`, and `after` fields. Duplicate webhook deliveries are deduped with a bounded persistent cache. You can choose which resource types to subscribe to in the integration options.
 
 ## 🌐 API compatibility
 
@@ -160,8 +165,14 @@ When developing changes, test:
 - Entity creation and attribute data
 - Habit increase/decrease actions
 - Webhook registration
-- Webhook signature verification
+- Webhook signature verification and dedupe
 - API error handling
+
+Basic unit tests are in `tests/` and can be run with:
+
+```bash
+python -m pytest -q
+```
 
 ## 🔄 Updating
 

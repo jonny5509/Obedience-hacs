@@ -5,14 +5,25 @@ from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.config_entries import ConfigEntry, ConfigEntryAuthFailed
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 
 from .api import ObedienceApi
-from .const import CONF_EXTENSION_ID, CONF_POLL_INTERVAL, CONF_SECRET, DOMAIN, PLATFORMS
+from .const import (
+    CONF_EXTENSION_ID,
+    CONF_POLL_INTERVAL,
+    CONF_SECRET,
+    CONF_WEBHOOK_HABITS,
+    CONF_WEBHOOK_PUNISHMENTS,
+    CONF_WEBHOOK_RELATIONSHIPS,
+    CONF_WEBHOOK_REWARDS,
+    DEFAULT_WEBHOOK_SUBSCRIPTIONS,
+    DOMAIN,
+    PLATFORMS,
+)
 from .coordinator import ObedienceCoordinator
 from .util import find_https_external_url
 from .webhook import async_register_views
@@ -26,21 +37,66 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     hass.data.setdefault(DOMAIN, {"pending": {}, "coordinators": {}})
     async_register_views(hass)
 
-    async def _handle_increment_habit(call) -> None:
-        habit_id = call.data["habit_id"]
+    async def _handle_increment_habit(call):
+        habit_id = call.data.get("habit_id")
         amount = call.data["amount"]
+        entity_ids = call.data.get("entity_id")
+        if entity_ids and not habit_id:
+            if isinstance(entity_ids, str):
+                entity_ids = [entity_ids]
+            entity_registry = er.async_get(hass)
+            for entity_id in entity_ids:
+                entity = entity_registry.async_get(entity_id)
+                if not entity or entity.platform != DOMAIN or not entity.unique_id:
+                    continue
+                uid = entity.unique_id
+                marker = "_habit_"
+                if "_habits_" in uid:
+                    habit_id = uid.split("_habits_", 1)[1]
+                    break
+                if marker in uid:
+                    rest = uid.split(marker, 1)[1]
+                    if rest.endswith("_increase"):
+                        habit_id = rest[: -len("_increase")]
+                        break
+                    if rest.endswith("_decrease"):
+                        habit_id = rest[: -len("_decrease")]
+                        break
+                    if rest.endswith("_positive"):
+                        habit_id = rest[: -len("_positive")]
+                        break
+                    if "_metric_" in uid:
+                        metric_rest = uid.split("_habit_metric_", 1)[1]
+                        habit_id = metric_rest.rsplit("_", 1)[0]
+                        break
+
+        if not habit_id:
+            raise HomeAssistantError(
+                "Provide habit_id or an Obedience habit entity_id"
+            )
+
         coordinators = hass.data.get(DOMAIN, {}).get("coordinators", {})
-        for coordinator in coordinators.values():
+        for entry_id, coordinator in coordinators.items():
             if any(
                 str(habit.get("id")) == str(habit_id)
                 for habit in coordinator.data.get("habits", [])
             ):
-                await coordinator.api.increment_habit(str(habit_id), int(amount))
+                result = await coordinator.api.increment_habit(str(habit_id), int(amount))
                 await coordinator.async_request_refresh()
-                return
+                return {
+                    "entry_id": entry_id,
+                    "habit_id": str(habit_id),
+                    "amount": int(amount),
+                    "result": result,
+                }
         raise HomeAssistantError(f"Unknown Obedience habit id: {habit_id}")
 
-    hass.services.async_register(DOMAIN, "increment_habit", _handle_increment_habit)
+    hass.services.async_register(
+        DOMAIN,
+        "increment_habit",
+        _handle_increment_habit,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     return True
 
 
@@ -72,8 +128,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"{external_url.rstrip('/')}/api/obedience/webhook/"
             f"{entry.data[CONF_EXTENSION_ID]}"
         )
+        webhook_options = {
+            **DEFAULT_WEBHOOK_SUBSCRIPTIONS,
+            **entry.options,
+        }
         try:
-            await api.configure_webhook(webhook_url)
+            await api.configure_webhook(
+                webhook_url,
+                habits=bool(webhook_options.get(CONF_WEBHOOK_HABITS, True)),
+                rewards=bool(webhook_options.get(CONF_WEBHOOK_REWARDS, True)),
+                punishments=bool(webhook_options.get(CONF_WEBHOOK_PUNISHMENTS, True)),
+                relationships=bool(webhook_options.get(CONF_WEBHOOK_RELATIONSHIPS, True)),
+            )
         except ConfigEntryAuthFailed:
             # Bad credentials: let Home Assistant start the reauth flow.
             raise

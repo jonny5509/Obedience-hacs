@@ -114,6 +114,15 @@ class ObedienceApi:
             result[resource] = data
         return result
 
+    async def get_by_id(self, resource: str, obj_id: str) -> dict[str, Any] | None:
+        """Fetch a single Obedience object by resource and id."""
+        if resource not in {"habits", "rewards", "punishments", "relationships"}:
+            raise ValueError(f"Unsupported resource: {resource}")
+        data = await self._request("GET", resource, params={"id": obj_id})
+        if isinstance(data, dict):
+            return data
+        return None
+
     async def increment_habit(self, habit_id: str, amount: int) -> Any:
         if amount == 0:
             raise ValueError("amount must not be zero")
@@ -128,16 +137,24 @@ class ObedienceApi:
             },
         )
 
-    async def configure_webhook(self, webhook_url: str) -> Any:
+    async def configure_webhook(
+        self,
+        webhook_url: str,
+        *,
+        habits: bool = True,
+        rewards: bool = True,
+        punishments: bool = True,
+        relationships: bool = True,
+    ) -> Any:
         return await self._request(
             "POST",
             "webhook",
             allow_non_json=True,
             json={
                 "url": webhook_url,
-                "habits": True,
-                "rewards": True,
-                "punishments": True,
-                "relationships": True,
+                "habits": habits,
+                "rewards": rewards,
+                "punishments": punishments,
+                "relationships": relationships,
             },
         )

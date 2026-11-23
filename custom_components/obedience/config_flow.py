@@ -15,6 +15,11 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_SECRET,
     CONF_UID,
+    CONF_WEBHOOK_HABITS,
+    CONF_WEBHOOK_PUNISHMENTS,
+    CONF_WEBHOOK_RELATIONSHIPS,
+    CONF_WEBHOOK_REWARDS,
+    DEFAULT_WEBHOOK_SUBSCRIPTIONS,
     DOMAIN,
     NAME,
 )
@@ -171,12 +176,29 @@ class ObedienceOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current = self.config_entry.options.get(CONF_POLL_INTERVAL, 15)
+        options = {**DEFAULT_WEBHOOK_SUBSCRIPTIONS, **self.config_entry.options}
+        current = options.get(CONF_POLL_INTERVAL, 15)
         schema = vol.Schema(
             {
                 vol.Optional(CONF_POLL_INTERVAL, default=current): vol.All(
                     vol.Coerce(int), vol.Range(min=5, max=120)
                 ),
+                vol.Optional(
+                    CONF_WEBHOOK_HABITS,
+                    default=bool(options.get(CONF_WEBHOOK_HABITS, True)),
+                ): bool,
+                vol.Optional(
+                    CONF_WEBHOOK_REWARDS,
+                    default=bool(options.get(CONF_WEBHOOK_REWARDS, True)),
+                ): bool,
+                vol.Optional(
+                    CONF_WEBHOOK_PUNISHMENTS,
+                    default=bool(options.get(CONF_WEBHOOK_PUNISHMENTS, True)),
+                ): bool,
+                vol.Optional(
+                    CONF_WEBHOOK_RELATIONSHIPS,
+                    default=bool(options.get(CONF_WEBHOOK_RELATIONSHIPS, True)),
+                ): bool,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

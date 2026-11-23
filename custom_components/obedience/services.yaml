@@ -1,14 +1,25 @@
 increment_habit:
   name: Increment habit
-  description: Increment or decrement an Obedience habit's amount.
+  description: Increment or decrement an Obedience habit's amount. Provide habit_id or entity_id.
   fields:
     habit_id:
       name: Habit ID
-      description: The Obedience habit ID to change.
-      required: true
+      description: The Obedience habit ID to change. Optional if entity_id is provided.
+      required: false
       example: "abc123"
       selector:
         text:
+    entity_id:
+      name: Habit entity
+      description: An Obedience habit entity (sensor, button, or binary sensor) whose habit should be changed.
+      required: false
+      selector:
+        entity:
+          integration: obedience
+          domain:
+            - sensor
+            - button
+            - binary_sensor
     amount:
       name: Amount
       description: Non-zero integer amount to change the habit by.

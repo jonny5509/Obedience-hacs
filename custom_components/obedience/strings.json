@@ -18,6 +18,21 @@
       "auth_failed": "Obedience authorization did not return valid credentials."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Obedience options",
+        "description": "Configure polling and which Obedience webhook events this integration subscribes to.",
+        "data": {
+          "poll_interval": "Polling interval (minutes)",
+          "webhook_habits": "Subscribe to habit webhooks",
+          "webhook_rewards": "Subscribe to reward webhooks",
+          "webhook_punishments": "Subscribe to punishment webhooks",
+          "webhook_relationships": "Subscribe to relationship webhooks"
+        }
+      }
+    }
+  },
   "issues": {
     "webhook_registration_failed": {
       "title": "Obedience webhook not registered",
@@ -31,11 +46,15 @@
   "services": {
     "increment_habit": {
       "name": "Increment habit",
-      "description": "Increment or decrement an Obedience habit's amount.",
+      "description": "Increment or decrement an Obedience habit's amount. Provide habit_id or entity_id.",
       "fields": {
         "habit_id": {
           "name": "Habit ID",
-          "description": "The Obedience habit ID to change."
+          "description": "The Obedience habit ID to change. Optional if entity_id is provided."
+        },
+        "entity_id": {
+          "name": "Habit entity",
+          "description": "An Obedience habit entity whose habit should be changed."
         },
         "amount": {
           "name": "Amount",
