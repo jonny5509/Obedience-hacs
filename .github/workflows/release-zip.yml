@@ -33,10 +33,10 @@ jobs:
         shell: bash
         run: |
           test -d custom_components/obedience
-          cd custom_components
-          zip -r ../obedience.zip obedience \
-            -x 'obedience/__pycache__/*' 'obedience/**/*.pyc' 'obedience/.pytest_cache/*'
-          cd ..
+          cd custom_components/obedience
+          zip -r ../../obedience.zip . \
+            -x '*/__pycache__/*' '*.pyc' '*/.pytest_cache/*'
+          cd ../..
           unzip -l obedience.zip
 
       - name: Attach ZIP to GitHub Release
