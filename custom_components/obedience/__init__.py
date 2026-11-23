@@ -71,9 +71,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                         break
 
         if not habit_id:
-            raise HomeAssistantError(
-                "Provide habit_id or an Obedience habit entity_id"
-            )
+            raise HomeAssistantError("Provide habit_id or an Obedience habit entity_id")
 
         coordinators = hass.data.get(DOMAIN, {}).get("coordinators", {})
         for entry_id, coordinator in coordinators.items():
@@ -81,7 +79,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 str(habit.get("id")) == str(habit_id)
                 for habit in coordinator.data.get("habits", [])
             ):
-                result = await coordinator.api.increment_habit(str(habit_id), int(amount))
+                result = await coordinator.api.increment_habit(
+                    str(habit_id), int(amount)
+                )
                 await coordinator.async_request_refresh()
                 return {
                     "entry_id": entry_id,
@@ -138,7 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 habits=bool(webhook_options.get(CONF_WEBHOOK_HABITS, True)),
                 rewards=bool(webhook_options.get(CONF_WEBHOOK_REWARDS, True)),
                 punishments=bool(webhook_options.get(CONF_WEBHOOK_PUNISHMENTS, True)),
-                relationships=bool(webhook_options.get(CONF_WEBHOOK_RELATIONSHIPS, True)),
+                relationships=bool(
+                    webhook_options.get(CONF_WEBHOOK_RELATIONSHIPS, True)
+                ),
             )
         except ConfigEntryAuthFailed:
             # Bad credentials: let Home Assistant start the reauth flow.
