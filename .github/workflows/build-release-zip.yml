@@ -3,6 +3,12 @@ name: Build HACS Release ZIP
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to package (for example v2.5.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,12 +25,14 @@ jobs:
       - name: Checkout released tag
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ inputs.tag_name || github.event.release.tag_name }}
 
       - name: Verify manifest version matches release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag_name || github.event.release.tag_name }}
         run: |
           MANIFEST_VERSION=$(python -c "import json;print(json.load(open('custom_components/obedience/manifest.json'))['version'])")
-          TAG_VERSION="${{ github.event.release.tag_name }}"
+          TAG_VERSION="$RELEASE_TAG"
           TAG_VERSION="${TAG_VERSION#v}"
           if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
             echo "Manifest version ($MANIFEST_VERSION) does not match release tag ($TAG_VERSION)"
@@ -40,6 +48,6 @@ jobs:
       - name: Upload ZIP to release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ inputs.tag_name || github.event.release.tag_name }}
           files: obedience.zip
           fail_on_unmatched_files: true
